@@ -1,0 +1,103 @@
+#!/usr/bin/env -S cargo +nightly -Zscript
+---
+[package]
+name = "op-sa-wrapper"
+version = "0.1.0"
+edition = "2024"
+---
+use std::{env, process::{Stdio, Command}};
+
+fn load_op_service_account_token() -> String {
+  // Prefer env if provided to avoid decrypting every run. Accept legacy typo as well.
+  for key in [
+    "OP_SERVICE_ACCOUNT_TOKEN",
+    "OP_SERVICE_ACCOUT_TOKEN",
+    "op_service_accout_token",
+  ] {
+    if let Ok(token) = env::var(key) {
+      return token;
+    }
+  }
+
+  let gpg_tty = std::process::Command::new("tty")
+    .stdin(Stdio::inherit())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::inherit())
+    .output()
+    .expect("tty failed");
+  let gpg_tty = String::from_utf8_lossy(&gpg_tty.stdout).trim().to_string();
+
+  //dbg!(&gpg_tty);
+  dbg!("here");
+
+  let home = std::env::var("HOME").expect("HOME no set");
+  let output = Command::new("gpg")
+    .args([
+      "--decrypt",
+      &format!("{}/.secret/op_service_account_token.gpg", home),
+    ])
+    .stdin(Stdio::inherit())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::inherit())
+    .env("GPG_TTY", &gpg_tty)
+    .output()
+    .expect("failed to decrypt token");
+
+  assert!(
+    output.status.success(),
+    "gpg failed to decrypt op service account token",
+  );
+
+  String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn main() {
+  let op_service_account_token = load_op_service_account_token();
+
+  let mut args = std::env::args().skip(1);
+  dbg!(&args);
+
+  let mut cmd = Command::new("op");
+
+  if let Some(command) = args.next() {
+    let args: Vec<String> = args.collect();
+
+    if command == "run" {
+      dbg!("run");
+
+      if let Some(pos) = args.iter().position(|s| s == "--") {
+        let flags: Vec<String> = args[..pos].to_vec();
+        let commands: Vec<String> = args[pos+1..].to_vec();
+
+        dbg!(&flags, &commands);
+
+        cmd.arg("run");
+        cmd.args(flags);
+        cmd.arg("--");
+        //cmd.args(commands);
+        cmd.arg("sh");
+        cmd.arg("-c");
+        cmd.arg(format!(
+          "unset OP_SERVICE_ACCOUNT_TOKEN && {}",
+          commands.join(" ")
+        ));
+      }
+    } else {
+      cmd.args(args);
+    }
+  }
+
+  dbg!(&op_service_account_token);
+
+  dbg!(&cmd);
+  let status = cmd
+    .env("OP_SERVICE_ACCOUNT_TOKEN", op_service_account_token)
+    .status()
+    .expect("failed to execute op");
+
+  if let Some(code) = status.code() {
+    std::process::exit(code);
+  }
+}
+
+// TODO Vecが消せるか試す

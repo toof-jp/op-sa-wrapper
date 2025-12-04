@@ -15,17 +15,11 @@ fn load_op_service_account_token() -> String {
         .output()
         .expect("failed to decrypt token");
 
-    assert!(
-        output.status.success(),
-        "gpg failed to decrypt op service account token",
-    );
-
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
 fn main() {
     let op_service_account_token = load_op_service_account_token();
-    dbg!("start");
 
     let mut args = std::env::args().skip(1);
 
@@ -44,24 +38,22 @@ fn main() {
 
                 cmd.arg("run");
                 cmd.args(flags);
-                cmd.arg("--");
-                cmd.arg("sh");
-                cmd.arg("-c");
-                cmd.arg(format!(
-                    "unset OP_SERVICE_ACCOUNT_TOKEN && {}",
-                    commands.join(" ")
-                ));
+                cmd.args([
+                    "--",
+                    "sh",
+                    "-c",
+                    &format!("unset OP_SERVICE_ACCOUNT_TOKEN && {}", commands.join(" ")),
+                ]);
             }
         } else {
             cmd.args(args);
         }
     }
 
-    dbg!(&cmd);
     let status = cmd
         .env("OP_SERVICE_ACCOUNT_TOKEN", op_service_account_token)
         .status()
-        .expect("failed to execute op");
+        .expect("op failed");
 
     if let Some(code) = status.code() {
         std::process::exit(code);

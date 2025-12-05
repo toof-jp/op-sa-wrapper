@@ -1,4 +1,4 @@
-# op-sa-wrapper
+# 1Password CLI service account token authentication wrapper
 ## Usage
 save your 1Password service account token encrypted with GPG to `~/.secret/op_service_account_token.gpg`
 

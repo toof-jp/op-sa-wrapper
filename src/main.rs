@@ -1,20 +1,12 @@
 use std::process::Command;
 
 fn load_op_service_account_token() -> String {
-    let gpg_tty = std::process::Command::new("tty")
-        .output()
-        .expect("tty failed");
-
-    let gpg_tty = String::from_utf8_lossy(&gpg_tty.stdout).trim().to_string();
-
     let home = std::env::var("HOME").expect("HOME no set");
     let token_path = format!("{}/.secret/op_service_account_token.gpg", home);
     let output = Command::new("gpg")
         .args(["--decrypt", &token_path])
-        .env("GPG_TTY", &gpg_tty)
         .output()
         .expect("failed to decrypt token");
-
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
@@ -33,8 +25,6 @@ fn main() {
             if let Some(pos) = args.iter().position(|s| s == "--") {
                 let flags = args[..pos].to_vec();
                 let commands = args[pos + 1..].to_vec();
-
-                dbg!(&flags, &commands);
 
                 cmd.arg("run");
                 cmd.args(flags);

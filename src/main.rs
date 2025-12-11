@@ -26,13 +26,45 @@ fn main() {
                 let flags = args[..pos].to_vec();
                 let commands = args[pos + 1..].to_vec();
 
+                fn shell_escape(arg: &str) -> String {
+                    if arg.is_empty() {
+                        return "''".to_string();
+                    }
+                    let needs_quotes = arg.bytes().any(|b| matches!(b,
+                        b' ' | b'\t' | b'\n' | b'\r' | b'"' | b'\'' | b'`' | b'\\' | b'$' | b'&' |
+                        b'|' | b'>' | b'<' | b';' | b'(' | b')' | b'[' | b']' | b'{' | b'}' |
+                        b'*' | b'?' | b'!' | b'~'));
+
+                    if !needs_quotes {
+                        return arg.to_string();
+                    }
+
+                    let mut out = String::with_capacity(arg.len() + 2);
+                    out.push('\'');
+                    for ch in arg.chars() {
+                        if ch == '\'' {
+                            out.push_str("'\\''");
+                        } else {
+                            out.push(ch);
+                        }
+                    }
+                    out.push('\'');
+                    out
+                }
+
+                let escaped = commands
+                    .iter()
+                    .map(|s| shell_escape(s))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
                 cmd.arg("run");
                 cmd.args(flags);
                 cmd.args([
                     "--",
                     "sh",
                     "-c",
-                    &format!("unset OP_SERVICE_ACCOUNT_TOKEN && {}", commands.join(" ")),
+                    &format!("unset OP_SERVICE_ACCOUNT_TOKEN && {}", escaped),
                 ]);
             }
         } else {
